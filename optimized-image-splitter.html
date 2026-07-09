@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaia 圖片分割工具</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #d84f8b;
+      --primary-dark: #b83272;
+      --accent: #12a6a8;
+      --success: #13996f;
+      --paper: #ffffff;
+      --surface: #fff7fa;
+      --sidebar: #ffe7ef;
+      --text: #3b2440;
+      --muted: #8a617f;
+      --border: #f3b8cb;
+      --shadow: 0 12px 30px rgba(121, 45, 83, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow: hidden;
+      color: var(--text);
+      background: var(--surface);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+    }
+
+    button, input, select { font: inherit; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 286px;
+      height: 100vh;
+    }
+
+    .sidebar,
+    .preview-sidebar {
+      overflow-y: auto;
+      background: var(--sidebar);
+      padding: 18px;
+    }
+
+    .sidebar {
+      box-shadow: 2px 0 22px rgba(216, 79, 139, 0.16);
+    }
+
+    .preview-sidebar {
+      border-left: 1px solid var(--border);
+    }
+
+    .brand {
+      display: grid;
+      gap: 8px;
+      place-items: center;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    .brand img {
+      width: 128px;
+      max-width: 60%;
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    h1 {
+      margin: 0;
+      color: #813a8d;
+      font-size: 20px;
+      line-height: 1.35;
+    }
+
+    .panel {
+      margin-bottom: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--paper);
+      box-shadow: 0 4px 14px rgba(216, 79, 139, 0.12);
+    }
+
+    .panel-title {
+      margin: 0 0 10px;
+      color: var(--primary-dark);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .hint {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .btn {
+      width: 100%;
+      min-height: 36px;
+      margin: 0;
+      padding: 8px 10px;
+      border: 0;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--primary);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 800;
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      box-shadow: 0 3px 8px rgba(91, 24, 54, 0.13);
+    }
+
+    .btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      transform: none;
+    }
+
+    .btn-outline {
+      border: 1px solid var(--primary);
+      color: var(--primary-dark);
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .btn-outline:hover {
+      color: #fff;
+      background: var(--primary);
+    }
+
+    .btn-success { background: var(--success); }
+    .btn-warm { background: #d56a43; }
+
+    .grid-2,
+    .grid-3 {
+      display: grid;
+      gap: 8px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--primary-dark);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      min-height: 36px;
+      padding: 7px 9px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      outline: none;
+      color: var(--text);
+      background: #fff;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(216, 79, 139, 0.15);
+    }
+
+    .drop-zone {
+      padding: 18px 10px;
+      border: 2px dashed var(--primary);
+      border-radius: 8px;
+      text-align: center;
+      color: var(--primary-dark);
+      background: #fffbfc;
+      cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: #eefdfd;
+    }
+
+    .gallery {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      padding-bottom: 4px;
+      overflow-x: auto;
+    }
+
+    .gallery button {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 auto;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 7px;
+      background: #fff;
+      cursor: pointer;
+      opacity: 0.62;
+      overflow: hidden;
+    }
+
+    .gallery button.active {
+      border-color: var(--primary-dark);
+      opacity: 1;
+    }
+
+    .gallery img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .workspace {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background: #fff3f7;
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .toolbar {
+      position: absolute;
+      top: 14px;
+      left: 50%;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      max-width: calc(100% - 24px);
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 7px 18px rgba(98, 45, 69, 0.1);
+      transform: translateX(-50%);
+    }
+
+    .tool-btn {
+      min-width: 42px;
+      min-height: 28px;
+      padding: 4px 8px;
+      border: 1px solid var(--primary);
+      border-radius: 999px;
+      color: var(--primary-dark);
+      background: transparent;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .tool-btn:hover { background: #ffe6ef; }
+
+    .coord {
+      color: var(--primary-dark);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .empty-state {
+      padding: 34px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .preview-item {
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      text-align: center;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .preview-item:hover {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    .preview-item img {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-bottom: 5px;
+      border-radius: 5px;
+      background: #fff;
+    }
+
+    .preview-item span {
+      display: block;
+      overflow-wrap: anywhere;
+      color: #813a8d;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .safe-toggle {
+      display: flex;
+      gap: 7px;
+      align-items: flex-start;
+      margin-top: 10px;
+      color: var(--primary-dark);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .safe-toggle input {
+      width: 16px;
+      height: 16px;
+      margin: 1px 0 0;
+      flex: 0 0 auto;
+    }
+
+    @media (max-width: 1080px) {
+      body { overflow: auto; }
+      .app {
+        grid-template-columns: 300px minmax(420px, 1fr);
+        grid-template-rows: minmax(560px, 70vh) auto;
+        height: auto;
+        min-height: 100vh;
+      }
+      .preview-sidebar {
+        grid-column: 1 / -1;
+        border-left: 0;
+        border-top: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 760px) {
+      .app {
+        display: block;
+      }
+      .sidebar,
+      .preview-sidebar {
+        width: 100%;
+      }
+      .workspace {
+        height: 62vh;
+        min-height: 420px;
+      }
+      .toolbar {
+        top: 8px;
+        overflow-x: auto;
+        justify-content: flex-start;
+      }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="image.png" alt="Gaia" onerror="this.hidden = true">
+        <h1>Gaia 圖片分割工具</h1>
+      </div>
+
+      <section class="panel">
+        <p class="panel-title">1. 載入圖片</p>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <div class="drop-zone" id="dropZone" role="button" tabindex="0">
+          點選、拖曳圖片到這裡
+          <span class="hint">也支援直接貼上剪貼簿圖片</span>
+        </div>
+        <div class="gallery" id="imageGallery" aria-label="已載入圖片"></div>
+      </section>
+
+      <section class="panel">
+        <p class="panel-title">快速設定</p>
+        <div class="grid-3">
+          <button class="btn btn-outline preset-btn" data-ratio="1.15625" data-cols="4" data-rows="4" data-name="LINE貼圖">LINE</button>
+          <button class="btn btn-outline preset-btn" data-ratio="1" data-cols="3" data-rows="3" data-name="IG九宮格">IG</button>
+          <button class="btn btn-outline preset-btn" data-ratio="1" data-cols="3" data-rows="3" data-name="FB九宮格">FB</button>
+          <button class="btn btn-outline preset-btn" data-ratio="0.8" data-cols="2" data-rows="1" data-name="Threads貼文">Threads</button>
+          <button class="btn btn-outline preset-btn" data-ratio="1.7777778" data-cols="1" data-rows="1" data-name="YouTube封面">YouTube</button>
+          <button class="btn btn-outline preset-btn" data-ratio="0.7071068" data-cols="1" data-rows="1" data-name="A4直式">A4</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <p class="panel-title">AI 關鍵字設定</p>
+        <div class="row">
+          <input type="text" id="aiInput" placeholder="例如：16張 LINE 貼圖">
+          <button class="btn" id="aiBtn" style="width: 72px;">套用</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <p class="panel-title">裁切與分割</p>
+        <label for="ratioSelect">裁切比例</label>
+        <select id="ratioSelect">
+          <option value="free">自由比例</option>
+          <option value="1">1:1 正方形</option>
+          <option value="1.5">3:2</option>
+          <option value="1.3333333">4:3</option>
+          <option value="0.8">4:5</option>
+          <option value="1.7777778">16:9</option>
+          <option value="0.5625">9:16</option>
+          <option value="0.7071068">A4 直式</option>
+          <option value="1.15625">LINE 貼圖 370x320</option>
+        </select>
+
+        <div class="grid-2" style="margin-top: 10px;">
+          <div>
+            <label for="colsInput">欄數</label>
+            <input type="number" id="colsInput" value="2" min="1" max="15">
+          </div>
+          <div>
+            <label for="rowsInput">列數</label>
+            <input type="number" id="rowsInput" value="2" min="1" max="15">
+          </div>
+        </div>
+
+        <label class="safe-toggle">
+          <input type="checkbox" id="safeZoneCb" checked>
+          顯示安全範圍參考線
+        </label>
+      </section>
+
+      <section class="panel">
+        <button class="btn" id="generateBtn" style="min-height: 46px; font-size: 16px;">產生分割預覽</button>
+      </section>
+    </aside>
+
+    <section class="workspace" id="workspace" aria-label="圖片裁切工作區">
+      <div class="toolbar">
+        <button class="tool-btn" id="zoom50">50%</button>
+        <button class="tool-btn" id="zoom100">100%</button>
+        <button class="tool-btn" id="zoom200">200%</button>
+        <button class="tool-btn" id="zoomFit">符合</button>
+        <span class="coord" id="coordInfo">尚未載入圖片</span>
+      </div>
+      <canvas id="canvas"></canvas>
+    </section>
+
+    <aside class="preview-sidebar">
+      <p class="panel-title">輸出預覽</p>
+      <select id="formatSelect" aria-label="輸出格式">
+        <option value="image/png">PNG</option>
+        <option value="image/jpeg">JPG</option>
+        <option value="image/webp">WEBP</option>
+      </select>
+      <div class="grid-2" id="downloadBtns" style="display: none; margin: 10px 0 14px;">
+        <button class="btn btn-success" id="downloadZipBtn">下載 ZIP</button>
+        <button class="btn btn-warm" id="downloadPdfBtn">下載 PDF</button>
+      </div>
+      <div class="preview-grid" id="previewGrid">
+        <div class="empty-state">載入圖片並產生預覽後，分割結果會顯示在這裡。</div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const canvas = $('canvas');
+    const ctx = canvas.getContext('2d');
+    const workspace = $('workspace');
+    const fileInput = $('fileInput');
+    const dropZone = $('dropZone');
+    const gallery = $('imageGallery');
+
+    const state = {
+      images: [],
+      activeIndex: -1,
+      img: null,
+      cam: { x: 0, y: 0, zoom: 1 },
+      crop: { x: 0, y: 0, w: 0, h: 0 },
+      splitX: [],
+      splitY: [],
+      drag: null,
+      hoveredCell: null,
+      snapLine: null,
+      pinchDistance: null,
+      projectName: '圖片分割',
+      exports: []
+    };
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const numberValue = (id, fallback) => Number.parseInt($(id).value, 10) || fallback;
+    const ratioValue = () => $('ratioSelect').value;
+    const selectedRatio = () => ratioValue() === 'free' ? null : Number.parseFloat(ratioValue());
+
+    function sanitizeFileName(name) {
+      return name.replace(/[\\/:*?"<>|]+/g, '_').trim() || '圖片分割';
+    }
+
+    function resizeCanvas() {
+      const rect = workspace.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.round(rect.width * dpr));
+      const height = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { width: rect.width, height: rect.height };
+    }
+
+    function initSplits() {
+      const cols = clamp(numberValue('colsInput', 1), 1, 15);
+      const rows = clamp(numberValue('rowsInput', 1), 1, 15);
+      $('colsInput').value = cols;
+      $('rowsInput').value = rows;
+      state.splitX = Array.from({ length: cols - 1 }, (_, i) => (i + 1) / cols);
+      state.splitY = Array.from({ length: rows - 1 }, (_, i) => (i + 1) / rows);
+    }
+
+    function applyRatioFromCenter() {
+      const ratio = selectedRatio();
+      if (!state.img || !ratio) return;
+      const centerX = state.crop.x + state.crop.w / 2;
+      const centerY = state.crop.y + state.crop.h / 2;
+      let w = state.crop.w;
+      let h = w / ratio;
+
+      if (h > state.img.height * 0.96) {
+        h = state.img.height * 0.96;
+        w = h * ratio;
+      }
+      if (w > state.img.width * 0.96) {
+        w = state.img.width * 0.96;
+        h = w / ratio;
+      }
+
+      state.crop = {
+        x: clamp(centerX - w / 2, 0, state.img.width - w),
+        y: clamp(centerY - h / 2, 0, state.img.height - h),
+        w,
+        h
+      };
+    }
+
+    function fitScreen() {
+      if (!state.img) {
+        draw();
+        return;
+      }
+      const { width, height } = resizeCanvas();
+      const margin = 54;
+      const scaleX = (width - margin) / state.img.width;
+      const scaleY = (height - margin) / state.img.height;
+      state.cam.zoom = clamp(Math.min(scaleX, scaleY), 0.02, 4);
+      state.cam.x = (width - state.img.width * state.cam.zoom) / 2;
+      state.cam.y = (height - state.img.height * state.cam.zoom) / 2;
+      draw();
+    }
+
+    function setZoom(zoom) {
+      if (!state.img) return;
+      const { width, height } = resizeCanvas();
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const factor = zoom / state.cam.zoom;
+      state.cam.x = centerX - (centerX - state.cam.x) * factor;
+      state.cam.y = centerY - (centerY - state.cam.y) * factor;
+      state.cam.zoom = clamp(zoom, 0.02, 8);
+      draw();
+    }
+
+    function screenToWorld(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((clientX - rect.left) - state.cam.x) / state.cam.zoom,
+        y: ((clientY - rect.top) - state.cam.y) / state.cam.zoom
+      };
+    }
+
+    function constrainCrop(crop) {
+      const minSize = 24;
+      crop.w = Math.max(minSize, Math.min(crop.w, state.img.width));
+      crop.h = Math.max(minSize, Math.min(crop.h, state.img.height));
+      crop.x = clamp(crop.x, 0, state.img.width - crop.w);
+      crop.y = clamp(crop.y, 0, state.img.height - crop.h);
+      return crop;
+    }
+
+    function drawHandle(x, y) {
+      const size = 10 / state.cam.zoom;
+      ctx.fillStyle = '#b83272';
+      ctx.fillRect(x - size / 2, y - size / 2, size, size);
+    }
+
+    function draw() {
+      const { width, height } = resizeCanvas();
+      ctx.clearRect(0, 0, width, height);
+
+      if (!state.img) {
+        ctx.fillStyle = '#8a617f';
+        ctx.font = '700 15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('請先載入圖片', width / 2, height / 2);
+        $('coordInfo').textContent = '尚未載入圖片';
+        return;
+      }
+
+      const { img, cam, crop } = state;
+      ctx.save();
+      ctx.translate(cam.x, cam.y);
+      ctx.scale(cam.zoom, cam.zoom);
+
+      ctx.drawImage(img, 0, 0);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.56)';
+      ctx.fillRect(0, 0, img.width, img.height);
+      ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, crop.x, crop.y, crop.w, crop.h);
+
+      if (state.snapLine) {
+        ctx.strokeStyle = '#12a6a8';
+        ctx.lineWidth = 1.5 / cam.zoom;
+        ctx.beginPath();
+        if (state.snapLine.type === 'x') {
+          ctx.moveTo(state.snapLine.value, 0);
+          ctx.lineTo(state.snapLine.value, img.height);
+        } else {
+          ctx.moveTo(0, state.snapLine.value);
+          ctx.lineTo(img.width, state.snapLine.value);
+        }
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#ff5aa2';
+      ctx.lineWidth = 2 / cam.zoom;
+      ctx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.lineWidth = 1.5 / cam.zoom;
+      state.splitX.forEach((ratio) => {
+        const x = crop.x + crop.w * ratio;
+        ctx.beginPath();
+        ctx.moveTo(x, crop.y);
+        ctx.lineTo(x, crop.y + crop.h);
+        ctx.stroke();
+        ctx.fillStyle = '#ff5aa2';
+        ctx.fillRect(x - 3 / cam.zoom, crop.y + crop.h / 2 - 12 / cam.zoom, 6 / cam.zoom, 24 / cam.zoom);
+      });
+      state.splitY.forEach((ratio) => {
+        const y = crop.y + crop.h * ratio;
+        ctx.beginPath();
+        ctx.moveTo(crop.x, y);
+        ctx.lineTo(crop.x + crop.w, y);
+        ctx.stroke();
+        ctx.fillStyle = '#ff5aa2';
+        ctx.fillRect(crop.x + crop.w / 2 - 12 / cam.zoom, y - 3 / cam.zoom, 24 / cam.zoom, 6 / cam.zoom);
+      });
+
+      if ($('safeZoneCb').checked) drawSafeZones();
+      if (state.hoveredCell) drawHoveredCell();
+
+      drawHandle(crop.x, crop.y);
+      drawHandle(crop.x + crop.w / 2, crop.y);
+      drawHandle(crop.x + crop.w, crop.y);
+      drawHandle(crop.x, crop.y + crop.h / 2);
+      drawHandle(crop.x + crop.w, crop.y + crop.h / 2);
+      drawHandle(crop.x, crop.y + crop.h);
+      drawHandle(crop.x + crop.w / 2, crop.y + crop.h);
+      drawHandle(crop.x + crop.w, crop.y + crop.h);
+
+      ctx.restore();
+      $('coordInfo').textContent = `裁切 ${Math.round(crop.w)} x ${Math.round(crop.h)} | X ${Math.round(crop.x)} Y ${Math.round(crop.y)}`;
+    }
+
+    function cellBounds(row, col) {
+      const leftRatio = col === 0 ? 0 : state.splitX[col - 1];
+      const rightRatio = col === state.splitX.length ? 1 : state.splitX[col];
+      const topRatio = row === 0 ? 0 : state.splitY[row - 1];
+      const bottomRatio = row === state.splitY.length ? 1 : state.splitY[row];
+      return {
+        x: state.crop.x + leftRatio * state.crop.w,
+        y: state.crop.y + topRatio * state.crop.h,
+        w: (rightRatio - leftRatio) * state.crop.w,
+        h: (bottomRatio - topRatio) * state.crop.h
+      };
+    }
+
+    function drawSafeZones() {
+      const cols = state.splitX.length + 1;
+      const rows = state.splitY.length + 1;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(38, 184, 121, 0.95)';
+      ctx.lineWidth = 1.4 / state.cam.zoom;
+      ctx.setLineDash([6 / state.cam.zoom, 5 / state.cam.zoom]);
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          const cell = cellBounds(row, col);
+          ctx.strokeRect(cell.x + cell.w * 0.1, cell.y + cell.h * 0.1, cell.w * 0.8, cell.h * 0.8);
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawHoveredCell() {
+      const cell = cellBounds(state.hoveredCell.row, state.hoveredCell.col);
+      ctx.fillStyle = 'rgba(255, 90, 162, 0.28)';
+      ctx.fillRect(cell.x, cell.y, cell.w, cell.h);
+    }
+
+    function getHitArea(pos, forcePan = false) {
+      if (forcePan) return { type: 'pan' };
+      const hitSize = 12 / state.cam.zoom;
+      const { x, y, w, h } = state.crop;
+
+      for (let i = 0; i < state.splitX.length; i += 1) {
+        const lineX = x + w * state.splitX[i];
+        if (Math.abs(pos.x - lineX) < hitSize && pos.y > y && pos.y < y + h) return { type: 'vline', index: i };
+      }
+      for (let i = 0; i < state.splitY.length; i += 1) {
+        const lineY = y + h * state.splitY[i];
+        if (Math.abs(pos.y - lineY) < hitSize && pos.x > x && pos.x < x + w) return { type: 'hline', index: i };
+      }
+
+      const handles = [
+        ['tl', x, y], ['tm', x + w / 2, y], ['tr', x + w, y],
+        ['lm', x, y + h / 2], ['rm', x + w, y + h / 2],
+        ['bl', x, y + h], ['bm', x + w / 2, y + h], ['br', x + w, y + h]
+      ];
+      for (const [handle, hx, hy] of handles) {
+        if (Math.abs(pos.x - hx) < hitSize && Math.abs(pos.y - hy) < hitSize) return { type: 'crop', handle };
+      }
+      if (pos.x > x && pos.x < x + w && pos.y > y && pos.y < y + h) return { type: 'crop', handle: 'inside' };
+      return { type: 'pan' };
+    }
+
+    function startDrag(clientX, clientY, forcePan = false) {
+      if (!state.img) return;
+      state.drag = {
+        target: getHitArea(screenToWorld(clientX, clientY), forcePan),
+        startX: clientX,
+        startY: clientY,
+        crop: { ...state.crop },
+        cam: { ...state.cam }
+      };
+    }
+
+    function moveDrag(clientX, clientY) {
+      if (!state.drag || !state.img) return;
+      const { target, startX, startY, crop: startCrop, cam: startCam } = state.drag;
+      const dx = (clientX - startX) / state.cam.zoom;
+      const dy = (clientY - startY) / state.cam.zoom;
+      const world = screenToWorld(clientX, clientY);
+      state.snapLine = null;
+
+      if (target.type === 'pan') {
+        state.cam.x = startCam.x + clientX - startX;
+        state.cam.y = startCam.y + clientY - startY;
+      } else if (target.type === 'vline') {
+        const min = target.index === 0 ? 0.02 : state.splitX[target.index - 1] + 0.02;
+        const max = target.index === state.splitX.length - 1 ? 0.98 : state.splitX[target.index + 1] - 0.02;
+        state.splitX[target.index] = clamp((world.x - state.crop.x) / state.crop.w, min, max);
+      } else if (target.type === 'hline') {
+        const min = target.index === 0 ? 0.02 : state.splitY[target.index - 1] + 0.02;
+        const max = target.index === state.splitY.length - 1 ? 0.98 : state.splitY[target.index + 1] - 0.02;
+        state.splitY[target.index] = clamp((world.y - state.crop.y) / state.crop.h, min, max);
+      } else if (target.type === 'crop') {
+        state.crop = resizeOrMoveCrop(startCrop, target.handle, dx, dy);
+      }
+      draw();
+    }
+
+    function resizeOrMoveCrop(startCrop, handle, dx, dy) {
+      const ratio = selectedRatio();
+      const crop = { ...startCrop };
+
+      if (handle === 'inside') {
+        crop.x += dx;
+        crop.y += dy;
+
+        const snapDistance = 15 / state.cam.zoom;
+        const centerX = state.img.width / 2;
+        const centerY = state.img.height / 2;
+        if (Math.abs(crop.x + crop.w / 2 - centerX) < snapDistance) {
+          crop.x = centerX - crop.w / 2;
+          state.snapLine = { type: 'x', value: centerX };
+        }
+        if (Math.abs(crop.y + crop.h / 2 - centerY) < snapDistance) {
+          crop.y = centerY - crop.h / 2;
+          state.snapLine = { type: 'y', value: centerY };
+        }
+        return constrainCrop(crop);
+      }
+
+      if (handle.includes('l')) {
+        crop.x += dx;
+        crop.w -= dx;
+      }
+      if (handle.includes('r')) crop.w += dx;
+      if (handle.includes('t')) {
+        crop.y += dy;
+        crop.h -= dy;
+      }
+      if (handle.includes('b')) crop.h += dy;
+
+      if (ratio) {
+        const anchorRight = handle.includes('l');
+        const anchorBottom = handle.includes('t');
+        const oldRight = startCrop.x + startCrop.w;
+        const oldBottom = startCrop.y + startCrop.h;
+        crop.h = crop.w / ratio;
+        if (anchorRight) crop.x = oldRight - crop.w;
+        if (anchorBottom) crop.y = oldBottom - crop.h;
+      }
+
+      return constrainCrop(crop);
+    }
+
+    function updateCursor(event) {
+      if (!state.img || state.drag) return;
+      const hit = getHitArea(screenToWorld(event.clientX, event.clientY), event.shiftKey);
+      const cursors = {
+        vline: 'col-resize',
+        hline: 'row-resize',
+        pan: 'grab',
+        tl: 'nwse-resize',
+        br: 'nwse-resize',
+        tr: 'nesw-resize',
+        bl: 'nesw-resize',
+        tm: 'ns-resize',
+        bm: 'ns-resize',
+        lm: 'ew-resize',
+        rm: 'ew-resize',
+        inside: 'move'
+      };
+      canvas.style.cursor = hit.type === 'crop' ? cursors[hit.handle] : cursors[hit.type];
+    }
+
+    function renderGallery() {
+      gallery.innerHTML = '';
+      state.images.forEach((image, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = index === state.activeIndex ? 'active' : '';
+        button.setAttribute('aria-label', `選擇第 ${index + 1} 張圖片`);
+        button.addEventListener('click', () => setActiveImage(index));
+
+        const thumb = document.createElement('img');
+        thumb.src = image.src;
+        thumb.alt = '';
+        button.appendChild(thumb);
+        gallery.appendChild(button);
+      });
+    }
+
+    function setActiveImage(index) {
+      state.activeIndex = index;
+      state.img = state.images[index];
+      const marginX = state.img.width * 0.1;
+      const marginY = state.img.height * 0.1;
+      state.crop = {
+        x: marginX,
+        y: marginY,
+        w: state.img.width - marginX * 2,
+        h: state.img.height - marginY * 2
+      };
+      applyRatioFromCenter();
+      initSplits();
+      renderGallery();
+      fitScreen();
+    }
+
+    function handleFiles(files) {
+      const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith('image/'));
+      imageFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.addEventListener('load', () => {
+          const image = new Image();
+          image.addEventListener('load', () => {
+            state.images.push(image);
+            setActiveImage(state.images.length - 1);
+          });
+          image.src = reader.result;
+        });
+        reader.readAsDataURL(file);
+      });
+      fileInput.value = '';
+    }
+
+    function applyPreset({ ratio, cols, rows, name }) {
+      $('colsInput').value = cols;
+      $('rowsInput').value = rows;
+      $('ratioSelect').value = ratio;
+      state.projectName = name;
+      initSplits();
+      applyRatioFromCenter();
+      fitScreen();
+    }
+
+    function applySmartPreset() {
+      const text = $('aiInput').value.toLowerCase();
+      if ((text.includes('line') || text.includes('貼圖')) && (text.includes('16') || text.includes('十六'))) {
+        applyPreset({ ratio: '1.15625', cols: 4, rows: 4, name: 'LINE貼圖' });
+        alert('已套用 16 張 LINE 貼圖設定。');
+      } else if (text.includes('fb') || text.includes('facebook')) {
+        applyPreset({ ratio: '1', cols: 3, rows: 3, name: 'FB九宮格' });
+        alert('已套用 FB 九宮格設定。');
+      } else if (text.includes('ig') || text.includes('instagram') || text.includes('九宮格')) {
+        applyPreset({ ratio: '1', cols: 3, rows: 3, name: 'IG九宮格' });
+        alert('已套用 IG 九宮格設定。');
+      } else if (text.includes('a4')) {
+        applyPreset({ ratio: '0.7071068', cols: 1, rows: 1, name: 'A4直式' });
+        alert('已套用 A4 直式設定。');
+      } else if (text.includes('youtube') || text.includes('16:9')) {
+        applyPreset({ ratio: '1.7777778', cols: 1, rows: 1, name: 'YouTube封面' });
+        alert('已套用 YouTube 封面設定。');
+      } else {
+        alert('找不到對應設定。可輸入例如：16張 LINE 貼圖、IG 九宮格、A4、YouTube。');
+      }
+    }
+
+    function generatePreview() {
+      if (!state.img) {
+        alert('請先載入圖片。');
+        return;
+      }
+
+      const previewGrid = $('previewGrid');
+      const format = $('formatSelect').value;
+      const extension = format === 'image/jpeg' ? 'jpg' : format.split('/')[1];
+      const cols = state.splitX.length + 1;
+      const rows = state.splitY.length + 1;
+
+      state.exports = [];
+      previewGrid.innerHTML = '';
+
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          const cell = cellBounds(row, col);
+          const sx = Math.round(cell.x);
+          const sy = Math.round(cell.y);
+          const sw = Math.max(1, Math.round(cell.w));
+          const sh = Math.max(1, Math.round(cell.h));
+          const outCanvas = document.createElement('canvas');
+          outCanvas.width = sw;
+          outCanvas.height = sh;
+
+          const outCtx = outCanvas.getContext('2d');
+          if (format === 'image/jpeg') {
+            outCtx.fillStyle = '#ffffff';
+            outCtx.fillRect(0, 0, sw, sh);
+          }
+          outCtx.drawImage(state.img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+          const dataUrl = outCanvas.toDataURL(format, 0.92);
+          const dims = `${sw}x${sh}`;
+          const fileName = `${sanitizeFileName(state.projectName)}_R${row + 1}_C${col + 1}_${dims}.${extension}`;
+          state.exports.push({ name: fileName, dataUrl, base64: dataUrl.split(',')[1], w: sw, h: sh, format });
+
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'preview-item';
+          item.innerHTML = `<img src="${dataUrl}" alt=""><span>第 ${row + 1} 列 / 第 ${col + 1} 欄</span><span>${dims} px</span>`;
+          item.addEventListener('mouseenter', () => {
+            state.hoveredCell = { row, col };
+            draw();
+          });
+          item.addEventListener('mouseleave', () => {
+            state.hoveredCell = null;
+            draw();
+          });
+          previewGrid.appendChild(item);
+        }
+      }
+
+      $('downloadBtns').style.display = 'grid';
+    }
+
+    function downloadBlob(blob, fileName) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function downloadZip() {
+      if (!state.exports.length) return;
+      const zip = new JSZip();
+      state.exports.forEach((file) => zip.file(file.name, file.base64, { base64: true }));
+      const blob = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(blob, `${sanitizeFileName(state.projectName)}_分割圖片.zip`);
+    }
+
+    function downloadPdf() {
+      if (!state.exports.length) return;
+      const { jsPDF } = window.jspdf;
+      let pdf = null;
+
+      state.exports.forEach((file, index) => {
+        const landscape = file.w > file.h;
+        const orientation = landscape ? 'l' : 'p';
+        const pageW = landscape ? 297 : 210;
+        const pageH = landscape ? 210 : 297;
+
+        if (index === 0) pdf = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
+        else pdf.addPage('a4', orientation);
+
+        const scale = Math.min(pageW / file.w, pageH / file.h);
+        const renderW = file.w * scale;
+        const renderH = file.h * scale;
+        const renderX = (pageW - renderW) / 2;
+        const renderY = (pageH - renderH) / 2;
+        pdf.addImage(file.dataUrl, file.format === 'image/png' ? 'PNG' : 'JPEG', renderX, renderY, renderW, renderH);
+      });
+
+      pdf.save(`${sanitizeFileName(state.projectName)}_分割圖片.pdf`);
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') fileInput.click();
+    });
+    fileInput.addEventListener('change', (event) => handleFiles(event.target.files));
+    dropZone.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dropZone.classList.remove('dragover');
+      handleFiles(event.dataTransfer.files);
+    });
+    window.addEventListener('paste', (event) => {
+      const files = Array.from(event.clipboardData?.items || [])
+        .filter((item) => item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter(Boolean);
+      if (files.length) handleFiles(files);
+    });
+
+    $('colsInput').addEventListener('change', () => { initSplits(); draw(); });
+    $('rowsInput').addEventListener('change', () => { initSplits(); draw(); });
+    $('ratioSelect').addEventListener('change', () => {
+      state.projectName = '圖片分割';
+      applyRatioFromCenter();
+      draw();
+    });
+    $('safeZoneCb').addEventListener('change', draw);
+    $('aiBtn').addEventListener('click', applySmartPreset);
+    $('generateBtn').addEventListener('click', generatePreview);
+    $('downloadZipBtn').addEventListener('click', downloadZip);
+    $('downloadPdfBtn').addEventListener('click', downloadPdf);
+    $('zoomFit').addEventListener('click', fitScreen);
+    $('zoom50').addEventListener('click', () => setZoom(0.5));
+    $('zoom100').addEventListener('click', () => setZoom(1));
+    $('zoom200').addEventListener('click', () => setZoom(2));
+
+    document.querySelectorAll('.preset-btn').forEach((button) => {
+      button.addEventListener('click', () => applyPreset({
+        ratio: button.dataset.ratio,
+        cols: button.dataset.cols,
+        rows: button.dataset.rows,
+        name: button.dataset.name
+      }));
+    });
+
+    canvas.addEventListener('mousedown', (event) => {
+      if (event.button === 1) event.preventDefault();
+      startDrag(event.clientX, event.clientY, event.shiftKey || event.button === 1);
+    });
+    window.addEventListener('mousemove', (event) => {
+      if (state.drag) moveDrag(event.clientX, event.clientY);
+      else updateCursor(event);
+    });
+    window.addEventListener('mouseup', () => {
+      state.drag = null;
+      state.snapLine = null;
+      canvas.style.cursor = 'crosshair';
+      draw();
+    });
+    canvas.addEventListener('wheel', (event) => {
+      if (!state.img) return;
+      event.preventDefault();
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+      state.cam.x = mouseX - (mouseX - state.cam.x) * zoomFactor;
+      state.cam.y = mouseY - (mouseY - state.cam.y) * zoomFactor;
+      state.cam.zoom = clamp(state.cam.zoom * zoomFactor, 0.02, 8);
+      draw();
+    }, { passive: false });
+
+    canvas.addEventListener('touchstart', (event) => {
+      if (!state.img) return;
+      if (event.touches.length === 2) {
+        state.pinchDistance = Math.hypot(
+          event.touches[0].clientX - event.touches[1].clientX,
+          event.touches[0].clientY - event.touches[1].clientY
+        );
+      } else if (event.touches.length === 1) {
+        startDrag(event.touches[0].clientX, event.touches[0].clientY);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (event) => {
+      event.preventDefault();
+      if (!state.img) return;
+      if (event.touches.length === 2 && state.pinchDistance) {
+        const nextDistance = Math.hypot(
+          event.touches[0].clientX - event.touches[1].clientX,
+          event.touches[0].clientY - event.touches[1].clientY
+        );
+        const factor = nextDistance / state.pinchDistance;
+        const rect = canvas.getBoundingClientRect();
+        const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left;
+        const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top;
+        state.cam.x = midX - (midX - state.cam.x) * factor;
+        state.cam.y = midY - (midY - state.cam.y) * factor;
+        state.cam.zoom = clamp(state.cam.zoom * factor, 0.02, 8);
+        state.pinchDistance = nextDistance;
+        draw();
+      } else if (event.touches.length === 1) {
+        moveDrag(event.touches[0].clientX, event.touches[0].clientY);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => {
+      state.drag = null;
+      state.snapLine = null;
+      state.pinchDistance = null;
+      draw();
+    });
+
+    window.addEventListener('resize', () => {
+      if (state.img) fitScreen();
+      else draw();
+    });
+
+    initSplits();
+    draw();
+  </script>
+</body>
+</html>
