@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gaia 圖片分割工具</title>
+  <title>雅儀老師圖片分割工具</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
@@ -56,16 +56,19 @@
     }
 
     .brand {
-      display: grid;
-      gap: 8px;
-      place-items: center;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
       margin-bottom: 14px;
-      text-align: center;
+      text-align: left;
     }
 
     .brand img {
-      width: 128px;
-      max-width: 60%;
+      width: 62px;
+      height: 62px;
+      flex: 0 0 auto;
+      object-fit: cover;
       border-radius: 8px;
       box-shadow: var(--shadow);
     }
@@ -393,8 +396,8 @@
   <main class="app">
     <aside class="sidebar">
       <div class="brand">
-        <img src="image.png" alt="Gaia" onerror="this.hidden = true">
-        <h1>Gaia 圖片分割工具</h1>
+        <img src="ya-yi-icon.jpg" alt="雅儀老師圖示">
+        <h1>雅儀老師圖片分割工具</h1>
       </div>
 
       <section class="panel">
